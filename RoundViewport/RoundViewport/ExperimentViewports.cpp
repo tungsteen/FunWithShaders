@@ -33,11 +33,15 @@
 #include <Urho3D/Graphics/RenderPath.h>
 #include <Urho3D/Graphics/StaticModel.h>
 #include <Urho3D/Graphics/Zone.h>
+#include <Urho3D/Graphics/Texture2D.h>
+#include <Urho3D/Graphics/Texture.h>
+#include <Urho3D/Graphics/Technique.h>
 #include <Urho3D/Input/Input.h>
 #include <Urho3D/Resource/ResourceCache.h>
 #include <Urho3D/Scene/Scene.h>
 #include <Urho3D/UI/Font.h>
 #include <Urho3D/UI/Text.h>
+#include <Urho3D/UI/Sprite.h>
 #include <Urho3D/UI/UI.h>
 
 #include "ExperimentViewports.h"
@@ -59,8 +63,11 @@ void MultipleViewports::Setup()
     engineParameters_["WindowTitle"] = GetTypeName();
     engineParameters_["LogName"]     = GetSubsystem<FileSystem>()->GetAppPreferencesDir("urho3d", "logs") + GetTypeName() + ".log";
     engineParameters_["FullScreen"]  = false;
+    engineParameters_["WindowWidth"] = 800;
+    engineParameters_["WindowHeight"] = 600;
     engineParameters_["Headless"]    = false;
     engineParameters_["Sound"]       = false;
+    engineParameters_["ResourcePrefixPaths"] = "D:/Programming/cpp/Urho3D-sb-git/bin";
 }
 
 void MultipleViewports::Start()
@@ -217,23 +224,30 @@ void MultipleViewports::SetupViewports()
     effectRenderPath->SetEnabled("FXAA2", false);
     viewport->SetRenderPath(effectRenderPath);
 
+
+    screenNode_ = scene_->CreateChild("Screen");
+    screenNode_->SetRotation(Quaternion(-100.0f, 0.0f, 20.0f));
+    StaticModel* screenObject = screenNode_->CreateComponent<StaticModel>();
+    screenObject->SetModel(cache->GetResource<Model>("Models/Cylinder.mdl"));
+
+    // Create a renderable texture (1024x768, RGB format), enable bilinear filtering on it
+    SharedPtr<Texture2D> renderTexture(new Texture2D(context_));
+    renderTexture->SetSize(256, 256, Graphics::GetRGBFormat(), TEXTURE_RENDERTARGET);
+    renderTexture->SetFilterMode(FILTER_BILINEAR);
+
+    // Create a new material from scratch, use the diffuse unlit technique, assign the render texture
+    // as its diffuse texture, then assign the material to the screen plane object
+    SharedPtr<Material> renderMaterial(new Material(context_));
+    renderMaterial->SetTechnique(0, cache->GetResource<Technique>("Techniques/DiffUnlit.xml"));
+    renderMaterial->SetTexture(TU_DIFFUSE, renderTexture);
+    screenObject->SetMaterial(renderMaterial);
+
+    RenderSurface* surface = renderTexture->GetRenderSurface();
+    SharedPtr<Viewport> rttViewport(new Viewport(context_, scene_, rearCameraNode_->GetComponent<Camera>()));
+    surface->SetViewport(0, rttViewport);
+
     // Set up the rear camera viewport on top of the front view ("rear view mirror")
     // The viewport index must be greater in that case, otherwise the view would be left behind
-
-    UI* ui = GetSubsystem<UI>();
-//	SharedPtr<Cursor> cursor(new Cursor(context_));
-//	XMLFile* styleXML = GetSubsystem<ResourceCache>()->GetResource<XMLFile>("UI/DefaultStyle.xml");
-//	cursor->SetStyleAuto(styleXML);
-//	ui->SetCursor(cursor);
-//	GetSubsystem<Input>()->SetMouseVisible(true);
-
-
-	XMLFile* uiLayout = GetSubsystem<ResourceCache>()->GetResource<XMLFile>("UI/RoundViewport.xml");
-	UIElement* root = ui->GetRoot();
-	ui->LoadLayout(uiLayout);
-
-	//View3D* view = new View3D(context_);
-	//view->SetView(scene_, rearCameraNode_->GetComponent<Camera>());
 }
 
 void MultipleViewports::SubscribeToEvents()
@@ -260,13 +274,15 @@ void MultipleViewports::MoveCamera(float timeStep)
     const float MOUSE_SENSITIVITY = 0.1f;
 
     // Use this frame's mouse motion to adjust camera node yaw and pitch. Clamp the pitch between -90 and 90 degrees
-    IntVector2 mouseMove = input->GetMouseMove();
-    yaw_ += MOUSE_SENSITIVITY * mouseMove.x_;
-    pitch_ += MOUSE_SENSITIVITY * mouseMove.y_;
-    pitch_ = Clamp(pitch_, -90.0f, 90.0f);
+//    IntVector2 mouseMove = input->GetMouseMove();
+//    yaw_ += MOUSE_SENSITIVITY * mouseMove.x_;
+//    yaw_ = Clamp(yaw_, -90.0f, 90.0f);
+//    pitch_ += MOUSE_SENSITIVITY * mouseMove.y_;
+//    pitch_ = Clamp(pitch_, -90.0f, 90.0f);
+
 
     // Construct new orientation for the camera scene node from yaw and pitch. Roll is fixed to zero
-    cameraNode_->SetRotation(Quaternion(pitch_, yaw_, 0.0f));
+    cameraNode_->SetRotation(Quaternion(0.0f, 0.0f, 0.0f));
 
     // Read WASD keys and move the camera scene node to the corresponding direction if they are pressed
     if (input->GetKeyDown('W'))
@@ -288,6 +304,15 @@ void MultipleViewports::MoveCamera(float timeStep)
     // Toggle debug geometry with space
     if (input->GetKeyPress(KEY_SPACE))
         drawDebug_ = !drawDebug_;
+
+    // rotation
+    Vector3 pos = cameraNode_->GetWorldPosition();
+    // translation
+    pos.z_ += 5;
+    pos.x_ += 2;
+    pos.y_ += 1.5;
+
+    screenNode_->SetWorldPosition(pos);
 }
 
 void MultipleViewports::HandleUpdate(StringHash eventType, VariantMap& eventData)

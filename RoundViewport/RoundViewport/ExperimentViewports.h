@@ -96,6 +96,7 @@ protected:
     }
     SharedPtr<Scene> scene_;
     SharedPtr<Node> cameraNode_;
+    SharedPtr<Node> screenNode_;
     float yaw_;
     float pitch_;
 private:
